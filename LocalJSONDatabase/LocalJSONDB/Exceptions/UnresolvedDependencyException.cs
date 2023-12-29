@@ -1,4 +1,4 @@
-﻿namespace ProjectGym.Services.DatabaseSerialization.Exceptions
+﻿namespace LocalJSONDatabase.Exceptions
 {
     [Serializable]
     public class UnresolvedDependencyException : Exception

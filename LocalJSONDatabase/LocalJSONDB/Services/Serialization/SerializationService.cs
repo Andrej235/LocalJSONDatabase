@@ -1,4 +1,7 @@
 ﻿using LocalJSONDatabase;
+using LocalJSONDatabase.Attributes;
+using LocalJSONDatabase.Exceptions;
+using System.Reflection;
 
 namespace LocalJSONDatabase.Services.Serialization
 {
@@ -18,19 +21,32 @@ namespace LocalJSONDatabase.Services.Serialization
                 + string.Join(", \n", properties.Select(property =>
                 {
                     string value = "";
+                    var propertyValue = property.GetValue(entity);
+
                     if (property.PropertyType == typeof(string))
-                        value = $"\"{property.GetValue(entity)}\"";
-                    else if (property.PropertyType == typeof(int) || property.PropertyType == typeof(float) || property.PropertyType == typeof(bool))
-                        value = $"{property.GetValue(entity)}".ToLower();
+                        value = $"\"{propertyValue}\"";
+                    else if (property.PropertyType == typeof(int) || property.PropertyType == typeof(float) || property.PropertyType == typeof(double) || property.PropertyType == typeof(decimal) || property.PropertyType == typeof(bool))
+                        value = $"{propertyValue}".ToLower();
                     else if (property.PropertyType == typeof(Guid) || property.PropertyType == typeof(DateOnly) || property.PropertyType == typeof(DateTime))
-                        value = $"\"{property.GetValue(entity)}\"";
+                        value = $"\"{propertyValue}\"";
                     else if (property.PropertyType.IsArray && property.PropertyType.GetElementType() == typeof(byte))
                     {
-                        if (property.GetValue(entity) is IEnumerable<byte> bytes)
+                        if (propertyValue is IEnumerable<byte> bytes)
                             value = $"\"{Convert.ToBase64String([.. bytes])}\"";
+                        //TODO: Add serialization support for other thing, also make sure to just include primary keys if its a list of models
+                        //else if (propertyValue is IEnumerable<object> objects)
+                            //value = $"[{string.Join(',', objects.Select(Serialize))}]";
                     }
                     else
-                        value = "\"Not implemented\"";
+                    {
+                        if (property.GetCustomAttribute(typeof(ForeignKeyAttribute)) is not null)
+                        {
+                            PropertyInfo foreignEntityPrimaryKeyProp = propertyValue?.GetType().GetProperties().FirstOrDefault(x => x.GetCustomAttribute(typeof(PrimaryKeyAttribute)) is not null) ?? throw new MissingPrimaryKeyPropertyException();
+                            value = $"{foreignEntityPrimaryKeyProp.GetValue(propertyValue)}";
+                        }
+                        else
+                            value = "\"Not implemented\"";
+                    }
 
                     return $"\"{property.Name}\": {value}";
                 }))

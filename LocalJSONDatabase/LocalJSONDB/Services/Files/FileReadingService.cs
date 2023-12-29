@@ -29,8 +29,9 @@ namespace LocalJSONDatabase.Services.Files
             {
                 return JsonSerializer.Deserialize<IEnumerable<T>>(Read()) ?? throw new NullReferenceException();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                LogDebugger.LogError(ex);
                 return null;
             }
         }

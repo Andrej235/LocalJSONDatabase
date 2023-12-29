@@ -1,13 +1,12 @@
-﻿/*using Microsoft.EntityFrameworkCore;
-using ProjectGym.Services.DatabaseSerialization.Exceptions;
-using ProjectGym.Utilities;
+﻿using LocalJSONDatabase.Attributes;
+using LocalJSONDatabase.Exceptions;
 using System.Dynamic;
 using System.Reflection;
 using System.Text.Json;
 
-namespace ProjectGym.Services.DatabaseSerialization
+namespace LocalJSONDatabase.Services.Serialization
 {
-    public static class DatabaseDeserializationService
+    public static class DeserializationService
     {
         struct OldNewIdPairs(object oldId, object newId)
         {
@@ -23,10 +22,21 @@ namespace ProjectGym.Services.DatabaseSerialization
         /// <param name="jsonEncodedDataBase">Data in a json format, will be translated into objects and injected into the database</param>
         /// <param name="modelNameToTableName">Calls this function every time it reaches a property marked as [ModelReference()] in order to find the name of that models table</param>
         /// <exception cref="ArgumentNullException"></exception>
-        public static async Task LoadDatabase<TContext>(TContext context, string jsonEncodedDataBase, Func<string, string> modelNameToTableName) where TContext : DbContext
+        public static async Task LoadDatabase<TContext>(TContext context, Func<string, string> modelNameToTableName) where TContext : DBContext
         {
             IEnumerable<PropertyInfo> tablesAsProperties = GetTablesAsProperties(context);
-            Dictionary<string, object> jsonBackupKeyValuePairs = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonEncodedDataBase) ?? throw new ArgumentNullException(nameof(jsonEncodedDataBase));
+            //Dictionary<string, object> jsonBackupKeyValuePairs = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonEncodedDataBase) ?? throw new ArgumentNullException(nameof(jsonEncodedDataBase));
+
+            Dictionary<string, object> jsonBackupKeyValuePairs = [];
+            foreach (var tableProp in tablesAsProperties)
+            {
+                var table = tableProp.GetValue(context);
+                var getJSONMethod = table?.GetType().GetMethod("GetJSONForm");
+                var json = getJSONMethod?.Invoke(table, null) ?? throw new NullReferenceException();
+
+                jsonBackupKeyValuePairs.Add(modelNameToTableName(tableProp.PropertyType.GetGenericArguments()[0].Name), JsonSerializer.Deserialize<object>(Convert.ToString(json) ?? "") ?? throw new NullReferenceException());
+            }
+
             Dictionary<string, IEnumerable<OldNewIdPairs>> idPairs = [];
             await LoadTablesFromProperties(context, tablesAsProperties, jsonBackupKeyValuePairs, idPairs, modelNameToTableName, 0);
         }
@@ -38,9 +48,9 @@ namespace ProjectGym.Services.DatabaseSerialization
         /// <param name="context">Instance of TContext which will be used to inject data into the database</param>
         /// <param name="jsonEncodedDataBase">Data in a json format, will be translated into objects and injected into the database</param>
         /// <exception cref="ArgumentNullException"></exception>
-        public static async Task LoadDatabase<TContext>(TContext context, string jsonEncodedDataBase) where TContext : DbContext => await LoadDatabase(context, jsonEncodedDataBase, x => x + "s");
+        public static async Task LoadDatabase<TContext>(TContext context) where TContext : DBContext => await LoadDatabase(context, x => x + "s");
 
-        private static async Task LoadTablesFromProperties<TContext>(TContext context, IEnumerable<PropertyInfo> tablesAsProperties, Dictionary<string, object> jsonDataToLoad, Dictionary<string, IEnumerable<OldNewIdPairs>> idPairs, Func<string, string> modelNameToTableName, int currentAttempt = 0) where TContext : DbContext
+        private static async Task LoadTablesFromProperties<TContext>(TContext context, IEnumerable<PropertyInfo> tablesAsProperties, Dictionary<string, object> jsonDataToLoad, Dictionary<string, IEnumerable<OldNewIdPairs>> idPairs, Func<string, string> modelNameToTableName, int currentAttempt = 0) where TContext : DBContext
         {
             List<PropertyInfo> tableBuffer = [];
             foreach (PropertyInfo tableProperty in tablesAsProperties)
@@ -51,7 +61,8 @@ namespace ProjectGym.Services.DatabaseSerialization
                     if (jsonDataToLoad[tableProperty.Name] is not JsonElement tableAsJsonElement)
                         continue;
 
-                    var currentTableIdPairs = await LoadTable(context, ProcessJSON(tableAsJsonElement), entityType, idPairs, modelNameToTableName);
+                    var a = ProcessJSON(tableAsJsonElement);
+                    var currentTableIdPairs = LoadTable(context, a, entityType, idPairs, modelNameToTableName);
                     idPairs.Add(tableProperty.Name, currentTableIdPairs);
                 }
                 catch (UnresolvedDependencyException ex)
@@ -66,7 +77,7 @@ namespace ProjectGym.Services.DatabaseSerialization
                 await LoadTablesFromProperties(context, tableBuffer, jsonDataToLoad, idPairs, modelNameToTableName, currentAttempt + 1);
         }
 
-        private static async Task<IEnumerable<OldNewIdPairs>> LoadTable<TContext>(TContext context, dynamic table, Type entityType, IDictionary<string, IEnumerable<OldNewIdPairs>> idPairs, Func<string, string> modelNameToTableName) where TContext : DbContext
+        private static List<OldNewIdPairs> LoadTable<TContext>(TContext context, dynamic table, Type entityType, IDictionary<string, IEnumerable<OldNewIdPairs>> idPairs, Func<string, string> modelNameToTableName) where TContext : DBContext
         {
             List<OldNewIdPairs> tableIdPairs = [];
             foreach (var entity in table)
@@ -90,17 +101,26 @@ namespace ProjectGym.Services.DatabaseSerialization
                         continue;
                     }
 
-                    var modelReferenceAttribute = Attribute.GetCustomAttribute(entityPropertyInfo, typeof(ModelReferenceAttribute));
+                    var modelReferenceAttribute = Attribute.GetCustomAttribute(entityPropertyInfo, typeof(ForeignKeyAttribute));
                     if (modelReferenceAttribute != null)
                     {
-                        var modelNameProperty = modelReferenceAttribute.GetType().GetProperty("PositionalString") ?? throw new NullReferenceException();
+                        //var modelNameProperty = modelReferenceAttribute.GetType().GetProperty("PositionalString") ?? throw new NullReferenceException();
 
-                        string? referencedModelName = Convert.ToString(modelNameProperty.GetValue(modelReferenceAttribute)) ?? "";
-                        if (referencedModelName == null || (!idPairs.TryGetValue(modelNameToTableName(referencedModelName), out IEnumerable<OldNewIdPairs>? idPairsOfSpecificTable) && !idPairs.TryGetValue(referencedModelName, out idPairsOfSpecificTable)))
+                        //string? referencedModelName = Convert.ToString(modelNameProperty.GetValue(modelReferenceAttribute)) ?? "";
+                        var referencedModelName = entityPropertyInfo.PropertyType.Name;
+                        if (referencedModelName == null || !idPairs.TryGetValue(modelNameToTableName(referencedModelName), out IEnumerable<OldNewIdPairs>? idPairsOfSpecificTable) && !idPairs.TryGetValue(referencedModelName, out idPairsOfSpecificTable))
                             throw new UnresolvedDependencyException(referencedModelName ?? "");
 
                         OldNewIdPairs specificIdPair = idPairsOfSpecificTable.First(x => Convert.ToString(x.oldId) == Convert.ToString(propertyValue));
-                        entityPropertyInfo.SetValue(newEntityInstance, specificIdPair.newId);
+
+                        var referencedTable = context.Table(entityPropertyInfo.PropertyType);
+                        if (referencedTable is not IEnumerable<object> values)
+                            continue;
+
+                        var primaryKeyPropInReferencedTableEntity = entityPropertyInfo.PropertyType.GetProperties().FirstOrDefault(x => x.GetCustomAttribute(typeof(PrimaryKeyAttribute)) is not null) ?? throw new MissingPrimaryKeyPropertyException();
+                        var referencedEntity = values.FirstOrDefault(x => Convert.ToString(primaryKeyPropInReferencedTableEntity.GetValue(x)) == Convert.ToString(specificIdPair.newId));
+
+                        entityPropertyInfo.SetValue(newEntityInstance, /*specificIdPair.newId*/ referencedEntity);
                         continue;
                     }
 
@@ -134,21 +154,20 @@ namespace ProjectGym.Services.DatabaseSerialization
                 }
 
                 if (oldId == null)
-                    throw new MissingIdColumnException();
+                    throw new MissingPrimaryKeyPropertyException();
 
-                await context.AddAsync(newEntityInstance);
-                await context.SaveChangesAsync();
+                context.Add(newEntityInstance, false);
 
-                object newId = newEntityInstance.GetType().GetProperty("Id")?.GetValue(newEntityInstance) ?? throw new MissingIdColumnException();
+                object newId = newEntityInstance.GetType().GetProperty("Id")?.GetValue(newEntityInstance) ?? throw new MissingPrimaryKeyPropertyException();
                 tableIdPairs.Add(new OldNewIdPairs(oldId, newId));
             }
             return tableIdPairs;
         }
 
-        private static IEnumerable<PropertyInfo> GetTablesAsProperties<TContext>(TContext context) where TContext : DbContext => context
+        private static IEnumerable<PropertyInfo> GetTablesAsProperties<TContext>(TContext context) where TContext : DBContext => context
             .GetType()
             .GetProperties()
-            .Where(x => x.PropertyType.IsGenericType && x.PropertyType.GetGenericTypeDefinition() == typeof(DbSet<>))
+            .Where(x => x.PropertyType.IsGenericType && x.PropertyType.GetGenericTypeDefinition() == typeof(DBTable<>))
             .OrderBy(x => x.PropertyType.GetGenericArguments()[0].GetProperties().Select(x => x.Name).Where(x => x.Contains("Id")).Count());
 
         private static object ProcessJSON(JsonElement jsonElement)
@@ -206,4 +225,4 @@ namespace ProjectGym.Services.DatabaseSerialization
             return false;
         }
     }
-}*/
+}
