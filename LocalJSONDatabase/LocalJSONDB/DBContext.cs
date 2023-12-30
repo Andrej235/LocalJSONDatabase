@@ -1,4 +1,6 @@
-﻿using LocalJSONDatabase.Services;
+﻿using LocalJSONDatabase.Attributes;
+using LocalJSONDatabase.Exceptions;
+using LocalJSONDatabase.Services;
 using LocalJSONDatabase.Services.Serialization;
 using System.Collections;
 using System.Linq.Expressions;
@@ -99,7 +101,7 @@ namespace LocalJSONDatabase
                             var valueType = values.FirstOrDefault()?.GetType();
                             if (valueType is null)
                             {
-                                //No elements / values is empty
+                                //No elements / values collection is empty
                                 var newValues = values.ToList();
                                 newValues.Add(entity);
 
@@ -111,11 +113,25 @@ namespace LocalJSONDatabase
                             }
                             else
                             {
+                                var valuePrimaryKeyProp = valueType.GetProperties().FirstOrDefault(x => x.GetCustomAttribute(typeof(PrimaryKeyAttribute)) != null) ?? throw new MissingPrimaryKeyPropertyException();
+                                var entityPrimaryKey = valuePrimaryKeyProp.GetValue(entity);
                                 foreach (var value in values)
                                 {
+                                    var valuePrimaryKey = valuePrimaryKeyProp.GetValue(value);
+                                    if (Convert.ToString(valuePrimaryKey) == Convert.ToString(entityPrimaryKey))
+                                        return;
                                     //Go through each element already referenced and compare primary key to entity
                                     //If an entity with entity's id doesn't exist in values collection add it and set the value
                                 }
+
+                                var newValues = values.ToList();
+                                newValues.Add(entity);
+
+                                var castMethod = typeof(Enumerable)
+                                                .GetMethod("Cast")?
+                                                .MakeGenericMethod(entity.GetType());
+
+                                relationship.Property2.SetValue(referencedEntity, castMethod?.Invoke(null, new object[] { newValues }));
                             }
                         }
                         else

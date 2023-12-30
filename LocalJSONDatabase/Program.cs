@@ -11,26 +11,33 @@ namespace LocalJSONDatabase
             var context = new UserDBContext(new());
             Initialize(context);
 
-            context.Users.Add(new()
-            {
-                Name = "Andrej",
-                Password = "password123"
-            });
+            /*            context.Users.Add(new()
+                        {
+                            Name = "Andrej",
+                            Password = "password123"
+                        });
 
-            context.Users.Add(new()
-            {
-                Id = 123,
-                Name = "Different user",
-                Password = "password"
-            });
+                        context.Users.Add(new()
+                        {
+                            Id = 123,
+                            Name = "Different user",
+                            Password = "password"
+                        });
 
-            //Posts
-            Post post1 = new()
+                        //Posts
+                        Post post1 = new()
+                        {
+                            Caption = "First post!",
+                            Creator = context.Users.FirstOrDefault(x => x.Id == 1) ?? throw new NullReferenceException()
+                        };
+                        context.Posts.Add(post1);*/
+
+            Post post2 = new()
             {
-                Caption = "First post!",
+                Caption = "Second post",
                 Creator = context.Users.FirstOrDefault(x => x.Id == 1) ?? throw new NullReferenceException()
             };
-            context.Posts.Add(post1);
+            context.Add(post2, true);
             //context.UpdateRelationships(post1);
             /*            foreach (var post in context.Posts)
                         {

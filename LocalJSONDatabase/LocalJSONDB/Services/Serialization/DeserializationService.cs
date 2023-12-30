@@ -108,6 +108,9 @@ namespace LocalJSONDatabase.Services.Serialization
                     var modelReferenceAttribute = Attribute.GetCustomAttribute(entityPropertyInfo, typeof(ForeignKeyAttribute));
                     if (modelReferenceAttribute != null)
                     {
+                        if (entityPropertyInfo.PropertyType.IsGenericType)
+                            continue; //Many to one relationship --- handled from the other side (one to many)
+
                         //var modelNameProperty = modelReferenceAttribute.GetType().GetProperty("PositionalString") ?? throw new NullReferenceException();
 
                         //string? referencedModelName = Convert.ToString(modelNameProperty.GetValue(modelReferenceAttribute)) ?? "";
