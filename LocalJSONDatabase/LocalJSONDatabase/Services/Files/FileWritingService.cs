@@ -15,13 +15,21 @@ namespace LocalJSONDatabase.Services.Files
                 throw new ArgumentException($"'{nameof(filePath)}' cannot be null or whitespace.", nameof(filePath));
 
             FilePath = filePath;
-            file = File.Open(filePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.Read);
+            file = File.Open(filePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite);
 
             writer = new(file);
         }
 
-        public void Write(string text)
+        public void Write(string text, bool overtype = false)
         {
+            if (overtype)
+            {
+                writer.BaseStream.SetLength(0);
+                writer.Write(text);
+                writer.Flush();
+                return;
+            }
+
             if (writer.BaseStream.Length > 1)
             {
                 writer.BaseStream.Seek(-1, SeekOrigin.End);

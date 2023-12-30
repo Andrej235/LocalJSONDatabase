@@ -16,17 +16,13 @@ namespace LocalJSONDatabase.Core
         private IEnumerable<PropertyInfo>? tablesProperties;
         readonly ModelBuilder modelBuilder;
 
-        protected DBContext(ModelBuilder modelBuilder)
-        {
-            this.modelBuilder = modelBuilder;
-        }
+        protected DBContext(ModelBuilder modelBuilder) => this.modelBuilder = modelBuilder;
 
         public async Task Initialize()
         {
             OnConfiguring(modelBuilder);
 
             tablesProperties = GetType().GetProperties().Where(x => x.PropertyType.IsGenericType && x.PropertyType.GetGenericTypeDefinition() == typeof(DBTable<>));
-
             foreach (PropertyInfo property in tablesProperties)
             {
                 var dbTableType = property.PropertyType;
@@ -38,25 +34,22 @@ namespace LocalJSONDatabase.Core
             await DeserializationService.LoadDatabase(this);
         }
 
-        public void Add(object entity, bool serialize)
+        public void Add(object entity, bool asignPrimaryKey = true)
         {
-            if (tablesProperties is null)
-                throw new UninitializedContextException(GetType().FullName ?? "");
-
-            var entityType = entity.GetType();
-            foreach (PropertyInfo property in tablesProperties)
-            {
-                var tableEntityType = property.PropertyType.GetGenericArguments()[0];
-                if (tableEntityType == entityType)
-                {
-                    var table = property.GetValue(this) ?? throw new NullReferenceException();
-                    var addMethod = table.GetType().GetMethod("Add");
-                    addMethod?.Invoke(table, [entity, serialize]);
-                }
-            }
+            var table = Table(entity.GetType());
+            var addMethod = table.GetType().GetMethod("Add");
+            addMethod?.Invoke(table, [entity, asignPrimaryKey]);
         }
+        public void Add<TEntity>(TEntity entity, bool asignPrimaryKey = true) where TEntity : class => Table<TEntity>().Add(entity, asignPrimaryKey);
 
-        public DBTable<T> TableGeneric<T>() where T : class
+        //TODO?: Add another delete method which takes an object like 'Add(object entity, bool asignPrimaryKey = true)'
+        public void Delete<TEntity>(TEntity entity) where TEntity : class => Table<TEntity>().Delete(entity);
+
+        //TODO?: Add another Find method which takes a type parameter like 'Table(Type entityType)'
+        public TEntity Find<TEntity>(object primaryKey) where TEntity : class => Table<TEntity>().Find(primaryKey);
+
+
+        public DBTable<T> Table<T>() where T : class
         {
             if (tablesProperties is null)
                 throw new UninitializedContextException(GetType().FullName ?? "");
@@ -71,15 +64,10 @@ namespace LocalJSONDatabase.Core
             }
             throw new NullReferenceException();
         }
-
-        public object Table(Type entityType)
-        {
-            return GetType().GetMethod("TableGeneric")?.MakeGenericMethod(entityType).Invoke(this, []) ?? throw new NullReferenceException();
-        }
+        public object Table(Type entityType) => GetType().GetMethod("Table", [])?.MakeGenericMethod(entityType).Invoke(this, []) ?? throw new NullReferenceException();
 
         public void UpdateRelationships(object entity)
         {
-            //TODO: Update the relationships in the files as well
             IEnumerable<Relationship>? relationships = modelBuilder.GetRelationships(entity.GetType()) ?? throw new NullReferenceException();
             foreach (var relationship in relationships)
             {
@@ -176,6 +164,20 @@ namespace LocalJSONDatabase.Core
                 {
                     LogDebugger.LogError(ex);
                 }
+            }
+        }
+
+        public void SaveChanges()
+        {
+            if (tablesProperties is null)
+                throw new UninitializedContextException(GetType().FullName ?? "");
+
+            foreach (var property in tablesProperties)
+            {
+                var saveChangesMethod = property.PropertyType.GetMethod("SaveChanges", []);
+                var table = property.GetValue(this);
+
+                saveChangesMethod?.Invoke(table, []);
             }
         }
     }

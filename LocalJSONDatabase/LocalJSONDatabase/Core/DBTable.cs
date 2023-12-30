@@ -9,9 +9,8 @@ namespace LocalJSONDatabase.Core
 {
     public class DBTable<TEntity> : IEnumerable<TEntity> where TEntity : class
     {
-        private readonly DBContext dBContext;
-
         public required List<TEntity> Entities { private get; init; }
+        private readonly DBContext dBContext;
         private readonly FileWritingService writingService;
         private readonly FileReadingService readingService;
 
@@ -33,12 +32,11 @@ namespace LocalJSONDatabase.Core
         }
 
         public IEnumerator<TEntity> GetEnumerator() => Entities.GetEnumerator();
-
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-        public void Add(TEntity entity, bool serialize = true)
+        public void Add(TEntity entity, bool asignPrimaryKey = true)
         {
-            if (serialize)
+            if (asignPrimaryKey)
             {
                 PropertyInfo primaryKeyProperty = entity.GetType().GetProperties().FirstOrDefault(x => x.GetCustomAttribute(typeof(PrimaryKeyAttribute)) != null) ?? throw new MissingPrimaryKeyPropertyException();
                 if (primaryKeyProperty.PropertyType == typeof(int))
@@ -47,33 +45,29 @@ namespace LocalJSONDatabase.Core
                     primaryKeyProperty.SetValue(entity, Guid.NewGuid());
                 else
                     throw new NotSupportedException("Unsupported type has been used as primary key.");
-
-                var entityJSON = SerializationService.Serialize(entity);
-                writingService.Write(entityJSON);
             }
 
             Entities.Add(entity);
             dBContext.UpdateRelationships(entity);
+        }
 
-            /*            var foreignKeyProperties = typeof(TEntity).GetProperties().Where(x => x.GetCustomAttribute(typeof(ForeignKeyAttribute)) is not null);
-                        foreach (var foreignKey in foreignKeyProperties)
-                        {
-                            var attribute = foreignKey.GetCustomAttribute(typeof(ForeignKeyAttribute)) ?? throw new NullReferenceException();
+        public TEntity Find(object primaryKey)
+        {
+            var primaryKeyProp = typeof(TEntity).GetProperties().FirstOrDefault(x => x.GetCustomAttribute(typeof(PrimaryKeyAttribute)) != null) ?? throw new MissingPrimaryKeyPropertyException();
+            return Entities.FirstOrDefault(x => Convert.ToString(primaryKeyProp.GetValue(x)) == Convert.ToString(primaryKey)) ?? throw new NullReferenceException();
+        }
 
-                            if (Convert.ToBoolean(attribute.GetType()?.GetProperty("Multiple")?.GetValue(attribute)))
-                            {
-                                //The reference foreignKey is an IEnumerable<T>
-                            }
-                            else
-                            {
-                                //The reference foreignKey is a single T
-                            }
+        public void Delete(TEntity entity) => Entities.Remove(entity);
+        public void Delete(IEnumerable<TEntity> entities)
+        {
+            foreach (var entity in entities)
+                Entities.Remove(entity);
+        }
 
-                            //Maybe do this the same way entity does? Define all relationships in an override method in dbContext?
-                        }
-
-                        //Create the opposite reference, if post points to user, user should also point to post
-                        Entities.Add(entity);*/
+        public void SaveChanges()
+        {
+            var entityJSON = SerializationService.Serialize(this);
+            writingService.Write(entityJSON, true);
         }
 
         public bool Contains(TEntity entity) => Entities.Contains(entity);
@@ -83,9 +77,6 @@ namespace LocalJSONDatabase.Core
             return Entities.Any(x => Convert.ToString(primaryKeyProperty.GetValue(x)) == Convert.ToString(key));
         }
 
-        public string GetJSONForm()
-        {
-            return readingService.Read();
-        }
+        public string GetJSONForm() => readingService.Read();
     }
 }

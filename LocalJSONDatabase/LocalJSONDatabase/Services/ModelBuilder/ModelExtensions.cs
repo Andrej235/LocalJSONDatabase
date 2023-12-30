@@ -1,9 +1,8 @@
-﻿using LocalJSONDatabase.Services.ModelBuilder;
-using System.Collections;
+﻿using System.Collections;
 using System.Linq.Expressions;
 using System.Reflection;
 
-namespace LocalJSONDatabase.Core
+namespace LocalJSONDatabase.Services.ModelBuilder
 {
     public static class ModelExtensions
     {
@@ -36,15 +35,9 @@ namespace LocalJSONDatabase.Core
 
         private static PropertyInfo GetPropertyInfo<TEntity1, TEntity2>(Expression<Func<TEntity1, TEntity2>> expression)
         {
-            if (expression.Body is MemberExpression memberExpression)
-            {
-                if (memberExpression.Member is PropertyInfo propertyInfo)
-                {
-                    return propertyInfo;
-                }
-            }
-
-            throw new NotSupportedException();
+            return expression.Body is MemberExpression memberExpression && memberExpression.Member is PropertyInfo propertyInfo
+                ? propertyInfo
+                : throw new NotSupportedException();
         }
     }
 }

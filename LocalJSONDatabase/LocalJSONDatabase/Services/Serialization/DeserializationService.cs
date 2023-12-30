@@ -96,19 +96,13 @@ namespace LocalJSONDatabase.Services.Serialization
                         if (entityPropertyInfo.PropertyType.IsGenericType)
                             continue; //Many to one relationship --- handled from the other side (one to many)
 
-                        //var modelNameProperty = modelReferenceAttribute.GetType().GetProperty("PositionalString") ?? throw new NullReferenceException();
-
-                        //string? referencedModelName = Convert.ToString(modelNameProperty.GetValue(modelReferenceAttribute)) ?? "";
-                        var referencedModelName = entityPropertyInfo.PropertyType.Name;
-
-                        var referencedTable = context.Table(entityPropertyInfo.PropertyType);
-                        if (referencedTable is not IEnumerable<object> values)
+                        if (context.Table(entityPropertyInfo.PropertyType) is not IEnumerable<object> referencedTable)
                             continue;
 
                         var primaryKeyPropInReferencedTableEntity = entityPropertyInfo.PropertyType.GetProperties().FirstOrDefault(x => x.GetCustomAttribute(typeof(PrimaryKeyAttribute)) is not null) ?? throw new MissingPrimaryKeyPropertyException();
-                        var referencedEntity = values.FirstOrDefault(x => Convert.ToString(primaryKeyPropInReferencedTableEntity.GetValue(x)) == Convert.ToString(Convert.ToString(propertyValue)));
+                        var referencedEntity = referencedTable.FirstOrDefault(x => Convert.ToString(primaryKeyPropInReferencedTableEntity.GetValue(x)) == Convert.ToString(Convert.ToString(propertyValue)));
 
-                        entityPropertyInfo.SetValue(newEntityInstance, /*specificIdPair.newId*/ referencedEntity);
+                        entityPropertyInfo.SetValue(newEntityInstance, referencedEntity);
                         continue;
                     }
 
@@ -125,7 +119,7 @@ namespace LocalJSONDatabase.Services.Serialization
                         continue;
                     }
 
-                    if (entityPropertyInfo.PropertyType == typeof(DateTime))
+                    if (entityPropertyInfo.PropertyType == typeof(DateOnly))
                     {
                         if (DateOnly.TryParse(Convert.ToString(propertyValue), out DateOnly date))
                             entityPropertyInfo.SetValue(newEntityInstance, date);

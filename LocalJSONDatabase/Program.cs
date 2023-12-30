@@ -10,41 +10,6 @@ namespace LocalJSONDatabase
         {
             var context = new UserDBContext(new());
             Initialize(context);
-
-            /*     context.Users.Add(new()
-                 {
-                     Name = "Andrej",
-                     Password = "password123"
-                 });
-
-                 context.Users.Add(new()
-                 {
-                     Id = 123,
-                     Name = "Different user",
-                     Password = "password"
-                 });
-
-                 //Posts
-                 Post post1 = new()
-                 {
-                     Caption = "First post!",
-                     Creator = context.Users.FirstOrDefault(x => x.Id == 1) ?? throw new NullReferenceException()
-                 };
-                 context.Posts.Add(post1);
-
-                 Post post2 = new()
-                 {
-                     Caption = "Second post",
-                     Creator = context.Users.FirstOrDefault(x => x.Id == 1) ?? throw new NullReferenceException()
-                 };
-                 context.Add(post2, true);*/
-
-            /*            foreach (var post in context.Posts)
-                        {
-                            Console.WriteLine($"Caption: {post.Caption}");
-                        }*/
-
-            //context.UpdateRelationships(context.Users.First(x => x.Id == 1));
         }
 
         private static async void Initialize(UserDBContext context)
@@ -60,7 +25,7 @@ namespace LocalJSONDatabase
         public required string Name { get; set; }
         public required string Password { get; set; }
 
-        [ForeignKey(Multiple = true)]
+        [ForeignKey]
         public IEnumerable<Post> Posts { get; set; } = [];
     }
 

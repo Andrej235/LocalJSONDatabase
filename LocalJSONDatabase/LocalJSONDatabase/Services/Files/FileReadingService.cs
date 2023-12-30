@@ -19,10 +19,7 @@ namespace LocalJSONDatabase.Services.Files
             reader = new(file);
         }
 
-        public string Read()
-        {
-            return reader.ReadToEnd();
-        }
+        public string Read() => reader.ReadToEnd();
 
         public IEnumerable<T>? Read<T>()
         {

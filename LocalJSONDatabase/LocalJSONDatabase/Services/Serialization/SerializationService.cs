@@ -2,7 +2,6 @@
 using LocalJSONDatabase.Exceptions;
 using LocalJSONDatabase.Core;
 using LocalJSONDatabase.Services.Utility;
-using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 
 namespace LocalJSONDatabase.Services.Serialization
@@ -12,13 +11,13 @@ namespace LocalJSONDatabase.Services.Serialization
         public static string Serialize<TEntity>(DBTable<TEntity> table) where TEntity : class
         {
             string entitiesJSON = string.Join(", \n", table.Select(Serialize));
-            string resultingJSON = $"{{\n\"{typeof(TEntity).Name}\": [\n{entitiesJSON}\n]\n}}";
+            string resultingJSON = $"[\n{entitiesJSON}\n]";
             return resultingJSON;
         }
 
         public static string Serialize(object entity)
         {
-            var properties = entity.GetType().GetProperties();//.Where(x => !x.PropertyType.IsGenericType);
+            var properties = entity.GetType().GetProperties();
             var resultingJSON = "{\n"
                 + string.Join(", \n", properties.Select(property =>
                 {
@@ -39,8 +38,6 @@ namespace LocalJSONDatabase.Services.Serialization
                     }
                     else if (propertyValue is IEnumerable<object> objects)
                     {
-                        //TODO: Add serialization support for other things, also make sure to just include primary keys if its a list of models
-                        //TODO: TEST After making the relationships work
                         var type = objects.FirstOrDefault()?.GetType();
                         if (type == null)
                             value = "[]";
