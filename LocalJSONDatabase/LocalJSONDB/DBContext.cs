@@ -54,7 +54,6 @@ namespace LocalJSONDatabase
                     addMethod?.Invoke(table, [entity, serialize]);
                 }
             }
-            UpdateRelationships(entity);
         }
 
         public DBTable<T> TableGeneric<T>() where T : class
@@ -84,16 +83,28 @@ namespace LocalJSONDatabase
                 IEnumerable<Relationship>? relationships = modelBuilder.GetRelationships(entity.GetType()) ?? throw new NullReferenceException();
                 foreach (var relationship in relationships)
                 {
-                    object referencedEntity = relationship.Property1?.GetValue(entity) ?? throw new NullReferenceException();
-                    var referencedEntityType = referencedEntity.GetType();
-                    if (referencedEntityType.IsGenericType && referencedEntityType.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+                    if ((relationship.Property1?.GetValue(entity) ?? throw new NullReferenceException()) is IEnumerable<object> referencedEntities)
                     {
                         //Many to one or many to many
+
+                        foreach (var referencedEntity in referencedEntities)
+                        {
+                            object referencedEntityRelationshipValue = relationship.Property2?.GetValue(referencedEntity) ?? throw new NullReferenceException();
+                            var referencedEntityRelationshipValueType = referencedEntityRelationshipValue.GetType();
+                            if (referencedEntityRelationshipValue is IEnumerable<object> values)
+                            {
+                                //Many to many
+                            }
+                            else
+                            {
+                                //Many to one
+                            }
+                        }
                     }
                     else
                     {
                         //One to many or one to one
-                        object referencedEntityRelationshipValue = relationship.Property2?.GetValue(referencedEntity) ?? throw new NullReferenceException();
+                        object referencedEntityRelationshipValue = relationship.Property2?.GetValue(relationship.Property1?.GetValue(entity) ?? throw new NullReferenceException()) ?? throw new NullReferenceException();
                         var referencedEntityRelationshipValueType = referencedEntityRelationshipValue.GetType();
                         if (referencedEntityRelationshipValue is IEnumerable<object> values)
                         {
@@ -109,7 +120,7 @@ namespace LocalJSONDatabase
                                                 .GetMethod("Cast")?
                                                 .MakeGenericMethod(entity.GetType());
 
-                                relationship.Property2.SetValue(referencedEntity, castMethod?.Invoke(null, new object[] { newValues }));
+                                relationship.Property2.SetValue(relationship.Property1?.GetValue(entity) ?? throw new NullReferenceException(), castMethod?.Invoke(null, new object[] { newValues }));
                             }
                             else
                             {
@@ -117,11 +128,11 @@ namespace LocalJSONDatabase
                                 var entityPrimaryKey = valuePrimaryKeyProp.GetValue(entity);
                                 foreach (var value in values)
                                 {
+                                    //Go through each element already referenced and compare primary key to entity
+                                    //If an entity with entity's id doesn't exist in values collection add it and set the value
                                     var valuePrimaryKey = valuePrimaryKeyProp.GetValue(value);
                                     if (Convert.ToString(valuePrimaryKey) == Convert.ToString(entityPrimaryKey))
                                         return;
-                                    //Go through each element already referenced and compare primary key to entity
-                                    //If an entity with entity's id doesn't exist in values collection add it and set the value
                                 }
 
                                 var newValues = values.ToList();
@@ -131,7 +142,7 @@ namespace LocalJSONDatabase
                                                 .GetMethod("Cast")?
                                                 .MakeGenericMethod(entity.GetType());
 
-                                relationship.Property2.SetValue(referencedEntity, castMethod?.Invoke(null, new object[] { newValues }));
+                                relationship.Property2.SetValue(relationship.Property1?.GetValue(entity) ?? throw new NullReferenceException(), castMethod?.Invoke(null, new object[] { newValues }));
                             }
                         }
                         else
@@ -139,7 +150,6 @@ namespace LocalJSONDatabase
                             //One to one
                         }
                     }
-
                 }
             }
             catch (Exception ex)
@@ -215,6 +225,23 @@ namespace LocalJSONDatabase
 
             var type2 = typeof(TEntity2);
             relationship.Type2 = !type2.IsGenericType ? type2 : (type2.GetGenericTypeDefinition() == typeof(IEnumerable) ? type2.GetGenericArguments()[0] : throw new NotImplementedException());
+
+            return relationship;
+        }
+
+        public static Relationship HasMany<TEntity1, TEntity2>(this Relationship relationship, Expression<Func<TEntity1, IEnumerable<TEntity2>>> expression)
+        {
+            relationship.Property1 = GetPropertyInfo(expression);
+
+            var type2 = typeof(TEntity2);
+            relationship.Type2 = !type2.IsGenericType ? type2 : (type2.GetGenericTypeDefinition() == typeof(IEnumerable) ? type2.GetGenericArguments()[0] : throw new NotImplementedException());
+
+            return relationship;
+        }
+
+        public static Relationship WithOne<TEntity1, TEntity2>(this Relationship relationship, Expression<Func<TEntity1, TEntity2>> expression)
+        {
+            relationship.Property2 = GetPropertyInfo(expression);
 
             return relationship;
         }

@@ -38,9 +38,6 @@ namespace LocalJSONDatabase
 
         public void Add(TEntity entity, bool serialize = true)
         {
-            Entities.Add(entity);
-            dBContext.UpdateRelationships(entity);
-
             if (serialize)
             {
                 PropertyInfo primaryKeyProperty = entity.GetType().GetProperties().FirstOrDefault(x => x.GetCustomAttribute(typeof(PrimaryKeyAttribute)) != null) ?? throw new MissingPrimaryKeyPropertyException();
@@ -52,28 +49,31 @@ namespace LocalJSONDatabase
                     throw new NotSupportedException("Unsupported type has been used as primary key.");
 
                 var entityJSON = SerializationService.Serialize(entity);
-                writingService.Write(entityJSON); 
+                writingService.Write(entityJSON);
             }
 
-/*            var foreignKeyProperties = typeof(TEntity).GetProperties().Where(x => x.GetCustomAttribute(typeof(ForeignKeyAttribute)) is not null);
-            foreach (var foreignKey in foreignKeyProperties)
-            {
-                var attribute = foreignKey.GetCustomAttribute(typeof(ForeignKeyAttribute)) ?? throw new NullReferenceException();
+            Entities.Add(entity);
+            dBContext.UpdateRelationships(entity);
 
-                if (Convert.ToBoolean(attribute.GetType()?.GetProperty("Multiple")?.GetValue(attribute)))
-                {
-                    //The reference foreignKey is an IEnumerable<T>
-                }
-                else
-                {
-                    //The reference foreignKey is a single T
-                }
+            /*            var foreignKeyProperties = typeof(TEntity).GetProperties().Where(x => x.GetCustomAttribute(typeof(ForeignKeyAttribute)) is not null);
+                        foreach (var foreignKey in foreignKeyProperties)
+                        {
+                            var attribute = foreignKey.GetCustomAttribute(typeof(ForeignKeyAttribute)) ?? throw new NullReferenceException();
 
-                //Maybe do this the same way entity does? Define all relationships in an override method in dbContext?
-            }
+                            if (Convert.ToBoolean(attribute.GetType()?.GetProperty("Multiple")?.GetValue(attribute)))
+                            {
+                                //The reference foreignKey is an IEnumerable<T>
+                            }
+                            else
+                            {
+                                //The reference foreignKey is a single T
+                            }
 
-            //Create the opposite reference, if post points to user, user should also point to post
-            Entities.Add(entity);*/
+                            //Maybe do this the same way entity does? Define all relationships in an override method in dbContext?
+                        }
+
+                        //Create the opposite reference, if post points to user, user should also point to post
+                        Entities.Add(entity);*/
         }
 
         public bool Contains(TEntity entity) => Entities.Contains(entity);

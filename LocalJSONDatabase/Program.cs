@@ -1,6 +1,4 @@
 ﻿using LocalJSONDatabase.Attributes;
-using System;
-using System.Runtime.InteropServices;
 
 namespace LocalJSONDatabase
 {
@@ -30,19 +28,21 @@ namespace LocalJSONDatabase
                             Caption = "First post!",
                             Creator = context.Users.FirstOrDefault(x => x.Id == 1) ?? throw new NullReferenceException()
                         };
-                        context.Posts.Add(post1);*/
+                        context.Posts.Add(post1);
 
-            Post post2 = new()
-            {
-                Caption = "Second post",
-                Creator = context.Users.FirstOrDefault(x => x.Id == 1) ?? throw new NullReferenceException()
-            };
-            context.Add(post2, true);
-            //context.UpdateRelationships(post1);
+                        Post post2 = new()
+                        {
+                            Caption = "Second post",
+                            Creator = context.Users.FirstOrDefault(x => x.Id == 1) ?? throw new NullReferenceException()
+                        };
+                        context.Add(post2, true);*/
+
             /*            foreach (var post in context.Posts)
                         {
                             Console.WriteLine($"Caption: {post.Caption}");
                         }*/
+
+            context.UpdateRelationships(context.Users.First(x => x.Id == 1));
         }
 
         private static async void Initialize(UserDBContext context)
@@ -87,6 +87,10 @@ namespace LocalJSONDatabase
             modelBuilder.Model<Post>()
                 .HasOne<Post, User>(x => x.Creator)
                 .WithMany<User, Post>(x => x.Posts);
+
+            modelBuilder.Model<User>()
+                .HasMany<User, Post>(x => x.Posts)
+                .WithOne<Post, User>(x => x.Creator);
         }
     }
 }

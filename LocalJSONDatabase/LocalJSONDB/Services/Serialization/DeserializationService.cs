@@ -8,13 +8,6 @@ namespace LocalJSONDatabase.Services.Serialization
 {
     public static class DeserializationService
     {
-        //TODO: Replace the old new Id system with just using old ids
-        struct OldNewIdPairs(object oldId, object newId)
-        {
-            public object oldId = oldId;
-            public object newId = newId;
-        }
-
         /// <summary>
         /// Loads the given data into the given database (context)
         /// </summary>
@@ -41,8 +34,7 @@ namespace LocalJSONDatabase.Services.Serialization
                 jsonBackupKeyValuePairs.Add(modelNameToTableName(tableProp.PropertyType.GetGenericArguments()[0].Name), JsonSerializer.Deserialize<object>(Convert.ToString(json) ?? "") ?? throw new NullReferenceException());
             }
 
-            Dictionary<string, IEnumerable<OldNewIdPairs>> idPairs = [];
-            await LoadTablesFromProperties(context, tablesAsProperties, jsonBackupKeyValuePairs, idPairs, modelNameToTableName, 0);
+            await LoadTablesFromProperties(context, tablesAsProperties, jsonBackupKeyValuePairs, modelNameToTableName, 0);
         }
 
         /// <summary>
@@ -54,7 +46,7 @@ namespace LocalJSONDatabase.Services.Serialization
         /// <exception cref="ArgumentNullException"></exception>
         public static async Task LoadDatabase<TContext>(TContext context) where TContext : DBContext => await LoadDatabase(context, x => x + "s");
 
-        private static async Task LoadTablesFromProperties<TContext>(TContext context, IEnumerable<PropertyInfo> tablesAsProperties, Dictionary<string, object> jsonDataToLoad, Dictionary<string, IEnumerable<OldNewIdPairs>> idPairs, Func<string, string> modelNameToTableName, int currentAttempt = 0) where TContext : DBContext
+        private static async Task LoadTablesFromProperties<TContext>(TContext context, IEnumerable<PropertyInfo> tablesAsProperties, Dictionary<string, object> jsonDataToLoad, Func<string, string> modelNameToTableName, int currentAttempt = 0) where TContext : DBContext
         {
             List<PropertyInfo> tableBuffer = [];
             foreach (PropertyInfo tableProperty in tablesAsProperties)
@@ -66,8 +58,7 @@ namespace LocalJSONDatabase.Services.Serialization
                         continue;
 
                     var a = ProcessJSON(tableAsJsonElement);
-                    var currentTableIdPairs = LoadTable(context, a, entityType, idPairs, modelNameToTableName);
-                    idPairs.Add(tableProperty.Name, currentTableIdPairs);
+                    LoadTable(context, a, entityType, modelNameToTableName);
                 }
                 catch (UnresolvedDependencyException ex)
                 {
@@ -78,16 +69,14 @@ namespace LocalJSONDatabase.Services.Serialization
                 }
             }
             if (tableBuffer.Count != 0)
-                await LoadTablesFromProperties(context, tableBuffer, jsonDataToLoad, idPairs, modelNameToTableName, currentAttempt + 1);
+                await LoadTablesFromProperties(context, tableBuffer, jsonDataToLoad, modelNameToTableName, currentAttempt + 1);
         }
 
-        private static List<OldNewIdPairs> LoadTable<TContext>(TContext context, dynamic table, Type entityType, IDictionary<string, IEnumerable<OldNewIdPairs>> idPairs, Func<string, string> modelNameToTableName) where TContext : DBContext
+        private static void LoadTable<TContext>(TContext context, dynamic table, Type entityType, Func<string, string> modelNameToTableName) where TContext : DBContext
         {
-            List<OldNewIdPairs> tableIdPairs = [];
             foreach (var entity in table)
             {
                 object newEntityInstance = Activator.CreateInstance(entityType) ?? throw new NullReferenceException();
-                object? oldId = null;
                 foreach (var property in (IDictionary<string, object>)entity)
                 {
                     string propertyName = property.Key;
@@ -99,12 +88,6 @@ namespace LocalJSONDatabase.Services.Serialization
                     if (Convert.ToString(propertyValue) == "Not implemented")
                         continue;
 
-                    if (propertyName == "Id")
-                    {
-                        oldId = propertyValue;
-                        continue;
-                    }
-
                     var modelReferenceAttribute = Attribute.GetCustomAttribute(entityPropertyInfo, typeof(ForeignKeyAttribute));
                     if (modelReferenceAttribute != null)
                     {
@@ -115,17 +98,13 @@ namespace LocalJSONDatabase.Services.Serialization
 
                         //string? referencedModelName = Convert.ToString(modelNameProperty.GetValue(modelReferenceAttribute)) ?? "";
                         var referencedModelName = entityPropertyInfo.PropertyType.Name;
-                        if (referencedModelName == null || !idPairs.TryGetValue(modelNameToTableName(referencedModelName), out IEnumerable<OldNewIdPairs>? idPairsOfSpecificTable) && !idPairs.TryGetValue(referencedModelName, out idPairsOfSpecificTable))
-                            throw new UnresolvedDependencyException(referencedModelName ?? "");
-
-                        OldNewIdPairs specificIdPair = idPairsOfSpecificTable.First(x => Convert.ToString(x.oldId) == Convert.ToString(propertyValue));
 
                         var referencedTable = context.Table(entityPropertyInfo.PropertyType);
                         if (referencedTable is not IEnumerable<object> values)
                             continue;
 
                         var primaryKeyPropInReferencedTableEntity = entityPropertyInfo.PropertyType.GetProperties().FirstOrDefault(x => x.GetCustomAttribute(typeof(PrimaryKeyAttribute)) is not null) ?? throw new MissingPrimaryKeyPropertyException();
-                        var referencedEntity = values.FirstOrDefault(x => Convert.ToString(primaryKeyPropInReferencedTableEntity.GetValue(x)) == Convert.ToString(specificIdPair.newId));
+                        var referencedEntity = values.FirstOrDefault(x => Convert.ToString(primaryKeyPropInReferencedTableEntity.GetValue(x)) == Convert.ToString(Convert.ToString(propertyValue)));
 
                         entityPropertyInfo.SetValue(newEntityInstance, /*specificIdPair.newId*/ referencedEntity);
                         continue;
@@ -160,15 +139,8 @@ namespace LocalJSONDatabase.Services.Serialization
                     entityPropertyInfo.SetValue(newEntityInstance, propertyValue);
                 }
 
-                if (oldId == null)
-                    throw new MissingPrimaryKeyPropertyException();
-
                 context.Add(newEntityInstance, false);
-
-                object newId = newEntityInstance.GetType().GetProperty("Id")?.GetValue(newEntityInstance) ?? throw new MissingPrimaryKeyPropertyException();
-                tableIdPairs.Add(new OldNewIdPairs(oldId, newId));
             }
-            return tableIdPairs;
         }
 
         private static IEnumerable<PropertyInfo> GetTablesAsProperties<TContext>(TContext context) where TContext : DBContext => context
