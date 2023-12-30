@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
 
-namespace LocalJSONDatabase.Services
+namespace LocalJSONDatabase.Services.Utility
 {
     public static class LogDebugger
     {

@@ -5,7 +5,7 @@ using LocalJSONDatabase.Services.Serialization;
 using System.Collections;
 using System.Reflection;
 
-namespace LocalJSONDatabase
+namespace LocalJSONDatabase.Core
 {
     public class DBTable<TEntity> : IEnumerable<TEntity> where TEntity : class
     {

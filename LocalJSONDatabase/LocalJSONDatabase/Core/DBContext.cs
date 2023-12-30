@@ -1,21 +1,19 @@
 ﻿using LocalJSONDatabase.Attributes;
 using LocalJSONDatabase.Exceptions;
-using LocalJSONDatabase.Services;
+using LocalJSONDatabase.Services.ModelBuilder;
+using LocalJSONDatabase.Services.Utility;
 using LocalJSONDatabase.Services.Serialization;
 using System.Collections;
-using System.Linq.Expressions;
 using System.Reflection;
 
-namespace LocalJSONDatabase
+namespace LocalJSONDatabase.Core
 {
     public abstract class DBContext
     {
-        private IEnumerable<PropertyInfo>? tablesProperties;
-
         protected abstract string DBDirectoryPath { get; }
-
         protected abstract void OnConfiguring(ModelBuilder modelBuilder);
 
+        private IEnumerable<PropertyInfo>? tablesProperties;
         readonly ModelBuilder modelBuilder;
 
         protected DBContext(ModelBuilder modelBuilder)
@@ -42,8 +40,10 @@ namespace LocalJSONDatabase
 
         public void Add(object entity, bool serialize)
         {
+            if (tablesProperties is null)
+                throw new UninitializedContextException(GetType().FullName ?? "");
+
             var entityType = entity.GetType();
-            tablesProperties = GetType().GetProperties().Where(x => x.PropertyType.IsGenericType && x.PropertyType.GetGenericTypeDefinition() == typeof(DBTable<>));
             foreach (PropertyInfo property in tablesProperties)
             {
                 var tableEntityType = property.PropertyType.GetGenericArguments()[0];
@@ -58,13 +58,15 @@ namespace LocalJSONDatabase
 
         public DBTable<T> TableGeneric<T>() where T : class
         {
-            tablesProperties = GetType().GetProperties().Where(x => x.PropertyType.IsGenericType && x.PropertyType.GetGenericTypeDefinition() == typeof(DBTable<>));
+            if (tablesProperties is null)
+                throw new UninitializedContextException(GetType().FullName ?? "");
+
             foreach (PropertyInfo property in tablesProperties)
             {
                 var tableEntityType = property.PropertyType.GetGenericArguments()[0];
                 if (tableEntityType == typeof(T))
                 {
-                    return ((DBTable<T>?)property.GetValue(this)) ?? throw new NullReferenceException();
+                    return (DBTable<T>?)property.GetValue(this) ?? throw new NullReferenceException();
                 }
             }
             throw new NullReferenceException();
@@ -176,123 +178,5 @@ namespace LocalJSONDatabase
                 }
             }
         }
-    }
-
-    public class ModelBuilder
-    {
-        private readonly List<Relationship> relationships = [];
-        public Relationship Model<TEntity>()
-        {
-            Relationship newRelationship = new(typeof(TEntity), null, null, null);
-            relationships.Add(newRelationship);
-            return newRelationship;
-        }
-
-        public IEnumerable<Relationship> GetRelationships(Type type)
-        {
-            return relationships.Where(x => x.Type1 == type);
-        }
-    }
-
-    /*    public class Model<TEntity>
-        {
-            private List<DoubleSidedRelationship<object, object>> expressions;
-
-            public Model(List<DoubleSidedRelationship<object, object>> expressions)
-            {
-                this.expressions = expressions;
-            }
-
-            public Relationship<TEntity, TRelationship> HasOne<TRelationship>(Expression<Func<TEntity, TRelationship>> expression)
-            {
-                return new(expression);
-            }
-        }
-
-        public class Relationship<TEntity1, TEntity2>
-        {
-            private Expression<Func<TEntity1, TEntity2>> RelationshipExpression { get; init; }
-            public Relationship(Expression<Func<TEntity1, TEntity2>> relationshipExpression)
-            {
-                RelationshipExpression = relationshipExpression;
-            }
-
-            public DoubleSidedRelationship<TEntity1, TEntity2> WithMany(Expression<Func<TEntity2, IEnumerable<TEntity1>>> expression)
-            {
-                return new(RelationshipExpression, expression);
-            }
-        }
-
-        public class DoubleSidedRelationship<TEntity1, TEntity2>
-        {
-            public DoubleSidedRelationship(Expression<Func<TEntity1, TEntity2>> leftSideRelationshipExpression, Expression<Func<TEntity2, IEnumerable<TEntity1>>> rightSideRelationshipExpression)
-            {
-                LeftSideRelationshipExpression = leftSideRelationshipExpression;
-                RightSideRelationshipExpression = rightSideRelationshipExpression;
-            }
-
-            private Expression<Func<TEntity1, TEntity2>> LeftSideRelationshipExpression { get; init; }
-            private Expression<Func<TEntity2, TEntity1>> RightSideRelationshipExpression { get; init; }
-
-        }*/
-
-    public static class RelationshipExtensions
-    {
-        public static Relationship HasOne<TEntity1, TEntity2>(this Relationship relationship, Expression<Func<TEntity1, TEntity2>> expression)
-        {
-            relationship.Property1 = GetPropertyInfo(expression);
-
-            var type2 = typeof(TEntity2);
-            relationship.Type2 = !type2.IsGenericType ? type2 : (type2.GetGenericTypeDefinition() == typeof(IEnumerable) ? type2.GetGenericArguments()[0] : throw new NotImplementedException());
-
-            return relationship;
-        }
-
-/*        public static Relationship HasMany<TEntity1, TEntity2>(this Relationship relationship, Expression<Func<TEntity1, IEnumerable<TEntity2>>> expression)
-        {
-            relationship.Property1 = GetPropertyInfo(expression);
-
-            var type2 = typeof(TEntity2);
-            relationship.Type2 = !type2.IsGenericType ? type2 : (type2.GetGenericTypeDefinition() == typeof(IEnumerable) ? type2.GetGenericArguments()[0] : throw new NotImplementedException());
-
-            return relationship;
-        }*/
-
-        public static Relationship WithOne<TEntity1, TEntity2>(this Relationship relationship, Expression<Func<TEntity1, TEntity2>> expression)
-        {
-            relationship.Property2 = GetPropertyInfo(expression);
-
-            return relationship;
-        }
-
-        public static Relationship WithMany<TEntity1, TEntity2>(this Relationship relationship, Expression<Func<TEntity1, IEnumerable<TEntity2>>> expression)
-        {
-            relationship.Property2 = GetPropertyInfo(expression);
-
-            return relationship;
-        }
-
-        private static PropertyInfo GetPropertyInfo<TEntity1, TEntity2>(Expression<Func<TEntity1, TEntity2>> expression)
-        {
-            if (expression.Body is MemberExpression memberExpression)
-            {
-                if (memberExpression.Member is PropertyInfo propertyInfo)
-                {
-                    return propertyInfo;
-                }
-            }
-
-            throw new NotSupportedException();
-        }
-    }
-
-    public class Relationship(Type Type1, Type? Type2, PropertyInfo? Property1, PropertyInfo? Property2)
-    {
-        public bool IsIncomplete => Type2 is null || Property1 is null || Property2 is null;
-
-        public Type Type1 { get; } = Type1;
-        public Type? Type2 { get; set; } = Type2;
-        public PropertyInfo? Property1 { get; set; } = Property1;
-        public PropertyInfo? Property2 { get; set; } = Property2;
     }
 }

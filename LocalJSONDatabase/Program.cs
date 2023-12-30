@@ -1,4 +1,6 @@
 ﻿using LocalJSONDatabase.Attributes;
+using LocalJSONDatabase.Core;
+using LocalJSONDatabase.Services.ModelBuilder;
 
 namespace LocalJSONDatabase
 {
@@ -9,33 +11,33 @@ namespace LocalJSONDatabase
             var context = new UserDBContext(new());
             Initialize(context);
 
-       /*     context.Users.Add(new()
-            {
-                Name = "Andrej",
-                Password = "password123"
-            });
+            /*     context.Users.Add(new()
+                 {
+                     Name = "Andrej",
+                     Password = "password123"
+                 });
 
-            context.Users.Add(new()
-            {
-                Id = 123,
-                Name = "Different user",
-                Password = "password"
-            });
+                 context.Users.Add(new()
+                 {
+                     Id = 123,
+                     Name = "Different user",
+                     Password = "password"
+                 });
 
-            //Posts
-            Post post1 = new()
-            {
-                Caption = "First post!",
-                Creator = context.Users.FirstOrDefault(x => x.Id == 1) ?? throw new NullReferenceException()
-            };
-            context.Posts.Add(post1);
+                 //Posts
+                 Post post1 = new()
+                 {
+                     Caption = "First post!",
+                     Creator = context.Users.FirstOrDefault(x => x.Id == 1) ?? throw new NullReferenceException()
+                 };
+                 context.Posts.Add(post1);
 
-            Post post2 = new()
-            {
-                Caption = "Second post",
-                Creator = context.Users.FirstOrDefault(x => x.Id == 1) ?? throw new NullReferenceException()
-            };
-            context.Add(post2, true);*/
+                 Post post2 = new()
+                 {
+                     Caption = "Second post",
+                     Creator = context.Users.FirstOrDefault(x => x.Id == 1) ?? throw new NullReferenceException()
+                 };
+                 context.Add(post2, true);*/
 
             /*            foreach (var post in context.Posts)
                         {
@@ -48,9 +50,6 @@ namespace LocalJSONDatabase
         private static async void Initialize(UserDBContext context)
         {
             await context.Initialize();
-
-            //var a = context.Users;
-            //var b = context.Posts;
         }
     }
 
@@ -107,13 +106,9 @@ namespace LocalJSONDatabase
 
         protected override void OnConfiguring(ModelBuilder modelBuilder)
         {
-/*            modelBuilder.Model<Superset>()
-                .HasOne<Superset, Set>(x => x.Set)
-                .WithOne<Set, Superset>(x => x.Superset);*/
-
             modelBuilder.Model<Post>()
-                .HasOne<Post, User>(x => x.Creator)
-                .WithMany<User, Post>(x => x.Posts);
+                .HasOne(x => x.Creator)
+                .WithMany(x => x.Posts);
         }
     }
 }
