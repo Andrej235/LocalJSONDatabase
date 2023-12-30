@@ -78,83 +78,102 @@ namespace LocalJSONDatabase
         public void UpdateRelationships(object entity)
         {
             //TODO: Update the relationships in the files as well
-            try
+            IEnumerable<Relationship>? relationships = modelBuilder.GetRelationships(entity.GetType()) ?? throw new NullReferenceException();
+            foreach (var relationship in relationships)
             {
-                IEnumerable<Relationship>? relationships = modelBuilder.GetRelationships(entity.GetType()) ?? throw new NullReferenceException();
-                foreach (var relationship in relationships)
+                try
                 {
-                    if ((relationship.Property1?.GetValue(entity) ?? throw new NullReferenceException()) is IEnumerable<object> referencedEntities)
-                    {
-                        //Many to one or many to many
+                    if (relationship.Property1 is null)
+                        throw new NullReferenceException(nameof(relationship.Property1));
 
-                        foreach (var referencedEntity in referencedEntities)
-                        {
-                            object referencedEntityRelationshipValue = relationship.Property2?.GetValue(referencedEntity) ?? throw new NullReferenceException();
-                            var referencedEntityRelationshipValueType = referencedEntityRelationshipValue.GetType();
-                            if (referencedEntityRelationshipValue is IEnumerable<object> values)
-                            {
-                                //Many to many
-                            }
-                            else
-                            {
-                                //Many to one
-                            }
-                        }
-                    }
-                    else
+                    if (relationship.Property2 is null)
+                        throw new NullReferenceException(nameof(relationship.Property2));
+
+                    //Throws NullReferenceException if relationship.Property1.GetValue(entity) == null, also check whether the relationship is One to X or Many to X
+                    if ((relationship.Property1.GetValue(entity) ?? throw new NullReferenceException()) is not IEnumerable<object> referencedEntities)
                     {
                         //One to many or one to one
-                        object referencedEntityRelationshipValue = relationship.Property2?.GetValue(relationship.Property1?.GetValue(entity) ?? throw new NullReferenceException()) ?? throw new NullReferenceException();
-                        var referencedEntityRelationshipValueType = referencedEntityRelationshipValue.GetType();
-                        if (referencedEntityRelationshipValue is IEnumerable<object> values)
+                        object? referencedEntityValue = relationship.Property2.GetValue(relationship.Property1.GetValue(entity));
+                        Type referencedEntityType = relationship.Property2.PropertyType;
+
+                        //If referencedEntityValue is null, check if it implements IEnumerable.
+                        //If so create a new instance so the rest of the code doesn't break
+                        //If not leave it as null
+                        if (referencedEntityValue is null && referencedEntityType.GetInterface(nameof(IEnumerable)) != null)
+                            referencedEntityValue = Activator.CreateInstance(referencedEntityType);
+
+                        if (referencedEntityValue is IEnumerable<object> values)
                         {
+                            //'referencedEntityValue' is a Collection named values (contains references to objects of same type as 'entity')
                             //One to many
                             var valueType = values.FirstOrDefault()?.GetType();
+                            List<object> newValues;
                             if (valueType is null)
                             {
                                 //No elements / values collection is empty
-                                var newValues = values.ToList();
-                                newValues.Add(entity);
-
-                                var castMethod = typeof(Enumerable)
-                                                .GetMethod("Cast")?
-                                                .MakeGenericMethod(entity.GetType());
-
-                                relationship.Property2.SetValue(relationship.Property1?.GetValue(entity) ?? throw new NullReferenceException(), castMethod?.Invoke(null, new object[] { newValues }));
+                                //Asign a new collection to it, with the only element inside it being 'entity'
+                                newValues = [entity];
                             }
                             else
                             {
                                 var valuePrimaryKeyProp = valueType.GetProperties().FirstOrDefault(x => x.GetCustomAttribute(typeof(PrimaryKeyAttribute)) != null) ?? throw new MissingPrimaryKeyPropertyException();
                                 var entityPrimaryKey = valuePrimaryKeyProp.GetValue(entity);
+                                bool entityAlreadyInValues = false;
                                 foreach (var value in values)
                                 {
-                                    //Go through each element already referenced and compare primary key to entity
-                                    //If an entity with entity's id doesn't exist in values collection add it and set the value
+                                    //Go through each element already referenced and compare each primary key to the one of 'entity'
+                                    //If an entity with pk of 'entity' doesn't exist in values collection add it and set the value
                                     var valuePrimaryKey = valuePrimaryKeyProp.GetValue(value);
                                     if (Convert.ToString(valuePrimaryKey) == Convert.ToString(entityPrimaryKey))
-                                        return;
+                                    {
+                                        entityAlreadyInValues = true;
+                                        break;
+                                    }
                                 }
 
-                                var newValues = values.ToList();
-                                newValues.Add(entity);
+                                if (entityAlreadyInValues)
+                                    continue;
 
-                                var castMethod = typeof(Enumerable)
-                                                .GetMethod("Cast")?
-                                                .MakeGenericMethod(entity.GetType());
+                                newValues = [.. values, entity];
 
-                                relationship.Property2.SetValue(relationship.Property1?.GetValue(entity) ?? throw new NullReferenceException(), castMethod?.Invoke(null, new object[] { newValues }));
                             }
+
+                            var castMethod = typeof(Enumerable)
+                                          .GetMethod("Cast")?
+                                          .MakeGenericMethod(entity.GetType());
+
+                            relationship.Property2.SetValue(relationship.Property1?.GetValue(entity) ?? throw new NullReferenceException(), castMethod?.Invoke(null, new object[] { newValues }));
                         }
                         else
                         {
                             //One to one
+                            //Set the previous relationship to null??? Maybe just hope the user doesn't screw up...
+                            relationship.Property2.SetValue(relationship.Property1?.GetValue(entity) ?? throw new NullReferenceException(), entity);
                         }
                     }
+                    /*                    else
+                                        {
+                                            //Many to one or many to many
+
+                                            foreach (var referencedEntity in referencedEntities)
+                                            {
+                                                object referencedEntityRelationshipValue = relationship.Property2?.GetValue(referencedEntity) ?? throw new NullReferenceException();
+                                                var referencedEntityRelationshipValueType = referencedEntityRelationshipValue.GetType();
+                                                if (referencedEntityRelationshipValue is IEnumerable<object> values)
+                                                {
+                                                    //Many to many
+                                                }
+                                                else
+                                                {
+                                                    //Many to one
+                                                }
+                                            }
+                                        }*/
                 }
-            }
-            catch (Exception ex)
-            {
-                LogDebugger.LogError(ex);
+                catch (Exception ex)
+                {
+                    LogDebugger.LogError(ex);
+                }
             }
         }
     }
@@ -229,7 +248,7 @@ namespace LocalJSONDatabase
             return relationship;
         }
 
-        public static Relationship HasMany<TEntity1, TEntity2>(this Relationship relationship, Expression<Func<TEntity1, IEnumerable<TEntity2>>> expression)
+/*        public static Relationship HasMany<TEntity1, TEntity2>(this Relationship relationship, Expression<Func<TEntity1, IEnumerable<TEntity2>>> expression)
         {
             relationship.Property1 = GetPropertyInfo(expression);
 
@@ -237,7 +256,7 @@ namespace LocalJSONDatabase
             relationship.Type2 = !type2.IsGenericType ? type2 : (type2.GetGenericTypeDefinition() == typeof(IEnumerable) ? type2.GetGenericArguments()[0] : throw new NotImplementedException());
 
             return relationship;
-        }
+        }*/
 
         public static Relationship WithOne<TEntity1, TEntity2>(this Relationship relationship, Expression<Func<TEntity1, TEntity2>> expression)
         {

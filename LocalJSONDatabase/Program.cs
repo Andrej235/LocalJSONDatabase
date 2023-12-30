@@ -9,40 +9,40 @@ namespace LocalJSONDatabase
             var context = new UserDBContext(new());
             Initialize(context);
 
-            /*            context.Users.Add(new()
-                        {
-                            Name = "Andrej",
-                            Password = "password123"
-                        });
+       /*     context.Users.Add(new()
+            {
+                Name = "Andrej",
+                Password = "password123"
+            });
 
-                        context.Users.Add(new()
-                        {
-                            Id = 123,
-                            Name = "Different user",
-                            Password = "password"
-                        });
+            context.Users.Add(new()
+            {
+                Id = 123,
+                Name = "Different user",
+                Password = "password"
+            });
 
-                        //Posts
-                        Post post1 = new()
-                        {
-                            Caption = "First post!",
-                            Creator = context.Users.FirstOrDefault(x => x.Id == 1) ?? throw new NullReferenceException()
-                        };
-                        context.Posts.Add(post1);
+            //Posts
+            Post post1 = new()
+            {
+                Caption = "First post!",
+                Creator = context.Users.FirstOrDefault(x => x.Id == 1) ?? throw new NullReferenceException()
+            };
+            context.Posts.Add(post1);
 
-                        Post post2 = new()
-                        {
-                            Caption = "Second post",
-                            Creator = context.Users.FirstOrDefault(x => x.Id == 1) ?? throw new NullReferenceException()
-                        };
-                        context.Add(post2, true);*/
+            Post post2 = new()
+            {
+                Caption = "Second post",
+                Creator = context.Users.FirstOrDefault(x => x.Id == 1) ?? throw new NullReferenceException()
+            };
+            context.Add(post2, true);*/
 
             /*            foreach (var post in context.Posts)
                         {
                             Console.WriteLine($"Caption: {post.Caption}");
                         }*/
 
-            context.UpdateRelationships(context.Users.First(x => x.Id == 1));
+            //context.UpdateRelationships(context.Users.First(x => x.Id == 1));
         }
 
         private static async void Initialize(UserDBContext context)
@@ -75,22 +75,45 @@ namespace LocalJSONDatabase
         public required User Creator { get; set; }
     }
 
+    public class Set
+    {
+        [PrimaryKey]
+        public int Id { get; set; }
+        public required string Exercise { get; set; }
+
+        [ForeignKey]
+        public Superset? Superset { get; set; }
+    }
+
+    public class Superset
+    {
+        [PrimaryKey]
+        public int Id { get; set; }
+        public required string Exercise { get; set; }
+
+        [ForeignKey]
+        public required Set Set { get; set; }
+    }
+
     public class UserDBContext(ModelBuilder modelBuilder) : DBContext(modelBuilder)
     {
         public DBTable<User> Users { get; set; } = null!;
         public DBTable<Post> Posts { get; set; } = null!;
 
+        //public DBTable<Set> Sets { get; set; } = null!;
+        //public DBTable<Superset> Supersets { get; set; } = null!;
+
         protected override string DBDirectoryPath => $"{Environment.GetFolderPath(Environment.SpecialFolder.Desktop)}";
 
         protected override void OnConfiguring(ModelBuilder modelBuilder)
         {
+/*            modelBuilder.Model<Superset>()
+                .HasOne<Superset, Set>(x => x.Set)
+                .WithOne<Set, Superset>(x => x.Superset);*/
+
             modelBuilder.Model<Post>()
                 .HasOne<Post, User>(x => x.Creator)
                 .WithMany<User, Post>(x => x.Posts);
-
-            modelBuilder.Model<User>()
-                .HasMany<User, Post>(x => x.Posts)
-                .WithOne<Post, User>(x => x.Creator);
         }
     }
 }

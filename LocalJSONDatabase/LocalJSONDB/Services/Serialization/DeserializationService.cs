@@ -58,7 +58,7 @@ namespace LocalJSONDatabase.Services.Serialization
                         continue;
 
                     var a = ProcessJSON(tableAsJsonElement);
-                    LoadTable(context, a, entityType, modelNameToTableName);
+                    LoadTable(context, a, entityType);
                 }
                 catch (UnresolvedDependencyException ex)
                 {
@@ -72,7 +72,7 @@ namespace LocalJSONDatabase.Services.Serialization
                 await LoadTablesFromProperties(context, tableBuffer, jsonDataToLoad, modelNameToTableName, currentAttempt + 1);
         }
 
-        private static void LoadTable<TContext>(TContext context, dynamic table, Type entityType, Func<string, string> modelNameToTableName) where TContext : DBContext
+        private static void LoadTable<TContext>(TContext context, dynamic table, Type entityType) where TContext : DBContext
         {
             foreach (var entity in table)
             {
