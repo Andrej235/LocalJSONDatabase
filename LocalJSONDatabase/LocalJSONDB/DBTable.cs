@@ -38,6 +38,9 @@ namespace LocalJSONDatabase
 
         public void Add(TEntity entity, bool serialize = true)
         {
+            Entities.Add(entity);
+            dBContext.UpdateRelationships(entity);
+
             if (serialize)
             {
                 PropertyInfo primaryKeyProperty = entity.GetType().GetProperties().FirstOrDefault(x => x.GetCustomAttribute(typeof(PrimaryKeyAttribute)) != null) ?? throw new MissingPrimaryKeyPropertyException();
@@ -52,7 +55,7 @@ namespace LocalJSONDatabase
                 writingService.Write(entityJSON); 
             }
 
-            var foreignKeyProperties = typeof(TEntity).GetProperties().Where(x => x.GetCustomAttribute(typeof(ForeignKeyAttribute)) is not null);
+/*            var foreignKeyProperties = typeof(TEntity).GetProperties().Where(x => x.GetCustomAttribute(typeof(ForeignKeyAttribute)) is not null);
             foreach (var foreignKey in foreignKeyProperties)
             {
                 var attribute = foreignKey.GetCustomAttribute(typeof(ForeignKeyAttribute)) ?? throw new NullReferenceException();
@@ -70,7 +73,7 @@ namespace LocalJSONDatabase
             }
 
             //Create the opposite reference, if post points to user, user should also point to post
-            Entities.Add(entity);
+            Entities.Add(entity);*/
         }
 
         public bool Contains(TEntity entity) => Entities.Contains(entity);

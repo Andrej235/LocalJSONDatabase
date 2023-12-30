@@ -8,6 +8,7 @@ namespace LocalJSONDatabase.Services.Serialization
 {
     public static class DeserializationService
     {
+        //TODO: Replace the old new Id system with just using old ids
         struct OldNewIdPairs(object oldId, object newId)
         {
             public object oldId = oldId;
@@ -33,6 +34,9 @@ namespace LocalJSONDatabase.Services.Serialization
                 var table = tableProp.GetValue(context);
                 var getJSONMethod = table?.GetType().GetMethod("GetJSONForm");
                 var json = getJSONMethod?.Invoke(table, null) ?? throw new NullReferenceException();
+
+                if (Convert.ToString(json) == "")
+                    return;
 
                 jsonBackupKeyValuePairs.Add(modelNameToTableName(tableProp.PropertyType.GetGenericArguments()[0].Name), JsonSerializer.Deserialize<object>(Convert.ToString(json) ?? "") ?? throw new NullReferenceException());
             }

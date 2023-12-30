@@ -1,6 +1,7 @@
 ﻿using LocalJSONDatabase;
 using LocalJSONDatabase.Attributes;
 using LocalJSONDatabase.Exceptions;
+using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 
 namespace LocalJSONDatabase.Services.Serialization
@@ -16,7 +17,7 @@ namespace LocalJSONDatabase.Services.Serialization
 
         public static string Serialize(object entity)
         {
-            var properties = entity.GetType().GetProperties().Where(x => !x.PropertyType.IsGenericType);
+            var properties = entity.GetType().GetProperties();//.Where(x => !x.PropertyType.IsGenericType);
             var resultingJSON = "{\n"
                 + string.Join(", \n", properties.Select(property =>
                 {
@@ -33,19 +34,38 @@ namespace LocalJSONDatabase.Services.Serialization
                     {
                         if (propertyValue is IEnumerable<byte> bytes)
                             value = $"\"{Convert.ToBase64String([.. bytes])}\"";
-                        //TODO: Add serialization support for other thing, also make sure to just include primary keys if its a list of models
-                        //else if (propertyValue is IEnumerable<object> objects)
-                            //value = $"[{string.Join(',', objects.Select(Serialize))}]";
+
+                    }
+                    else if (propertyValue is IEnumerable<object> objects)
+                    {
+                        //TODO: Add serialization support for other things, also make sure to just include primary keys if its a list of models
+                        //TODO: TEST After making the relationships work
+                        var type = objects.FirstOrDefault()?.GetType();
+                        if (type == null)
+                            value = "[]";
+                        else
+                        {
+                            var primaryKeyProp = type.GetProperties().FirstOrDefault(x => x.GetCustomAttribute(typeof(PrimaryKeyAttribute)) is not null) ?? throw new MissingPrimaryKeyPropertyException();
+                            value = $"[{string.Join(',', objects.Select(primaryKeyProp.GetValue))}]";
+                        }
                     }
                     else
                     {
-                        if (property.GetCustomAttribute(typeof(ForeignKeyAttribute)) is not null)
+                        try
                         {
-                            PropertyInfo foreignEntityPrimaryKeyProp = propertyValue?.GetType().GetProperties().FirstOrDefault(x => x.GetCustomAttribute(typeof(PrimaryKeyAttribute)) is not null) ?? throw new MissingPrimaryKeyPropertyException();
-                            value = $"{foreignEntityPrimaryKeyProp.GetValue(propertyValue)}";
+                            if (property.GetCustomAttribute(typeof(ForeignKeyAttribute)) is not null)
+                            {
+                                PropertyInfo foreignEntityPrimaryKeyProp = propertyValue?.GetType().GetProperties().FirstOrDefault(x => x.GetCustomAttribute(typeof(PrimaryKeyAttribute)) is not null) ?? throw new MissingPrimaryKeyPropertyException();
+                                value = $"{foreignEntityPrimaryKeyProp.GetValue(propertyValue)}";
+                            }
+                            else
+                                value = "\"Not implemented\"";
                         }
-                        else
+                        catch (Exception ex)
+                        {
+                            LogDebugger.LogError(ex);
                             value = "\"Not implemented\"";
+                        }
                     }
 
                     return $"\"{property.Name}\": {value}";

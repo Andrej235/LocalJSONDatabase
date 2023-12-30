@@ -8,10 +8,10 @@ namespace LocalJSONDatabase
     {
         static void Main()
         {
-            var context = new UserDBContext();
+            var context = new UserDBContext(new());
             Initialize(context);
 
-/*            context.Users.Add(new()
+            context.Users.Add(new()
             {
                 Name = "Andrej",
                 Password = "password123"
@@ -25,11 +25,17 @@ namespace LocalJSONDatabase
             });
 
             //Posts
-            context.Posts.Add(new()
+            Post post1 = new()
             {
                 Caption = "First post!",
                 Creator = context.Users.FirstOrDefault(x => x.Id == 1) ?? throw new NullReferenceException()
-            });*/
+            };
+            context.Posts.Add(post1);
+            //context.UpdateRelationships(post1);
+            /*            foreach (var post in context.Posts)
+                        {
+                            Console.WriteLine($"Caption: {post.Caption}");
+                        }*/
         }
 
         private static async void Initialize(UserDBContext context)
@@ -62,7 +68,7 @@ namespace LocalJSONDatabase
         public required User Creator { get; set; }
     }
 
-    public class UserDBContext : DBContext
+    public class UserDBContext(ModelBuilder modelBuilder) : DBContext(modelBuilder)
     {
         public DBTable<User> Users { get; set; } = null!;
         public DBTable<Post> Posts { get; set; } = null!;
@@ -71,15 +77,9 @@ namespace LocalJSONDatabase
 
         protected override void OnConfiguring(ModelBuilder modelBuilder)
         {
-            //throw new NotImplementedException();
+            modelBuilder.Model<Post>()
+                .HasOne<Post, User>(x => x.Creator)
+                .WithMany<User, Post>(x => x.Posts);
         }
-
-        /*        protected override void OnConfiguring(ModelBuilder modelBuilder)
-                {
-                    modelBuilder.Model<Post>()
-                        .HasOne(x => x.Creator)
-                        .WithMany(x => x.Posts);
-
-                }*/
     }
 }
