@@ -1,10 +1,10 @@
 ﻿using LocalJSONDatabase.Attributes;
 using LocalJSONDatabase.Exceptions;
-using LocalJSONDatabase.Services.ModelBuilder;
 using LocalJSONDatabase.Services.Utility;
 using LocalJSONDatabase.Services.Serialization;
 using System.Collections;
 using System.Reflection;
+using LocalJSONDatabase.Services.ModelBuilder;
 
 namespace LocalJSONDatabase.Core
 {
@@ -20,6 +20,8 @@ namespace LocalJSONDatabase.Core
 
         public async Task Initialize()
         {
+            FileStream logFile = new($"{DBDirectoryPath}/.log", FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite);
+            LogDebugger.InitializeWriter(new StreamWriter(logFile));
             OnConfiguring(modelBuilder);
 
             tablesProperties = GetType().GetProperties().Where(x => x.PropertyType.IsGenericType && x.PropertyType.GetGenericTypeDefinition() == typeof(DBTable<>));

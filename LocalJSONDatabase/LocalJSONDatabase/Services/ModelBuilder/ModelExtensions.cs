@@ -6,7 +6,7 @@ namespace LocalJSONDatabase.Services.ModelBuilder
 {
     public static class ModelExtensions
     {
-        public static Model<TEntity2> HasOne<TEntity1, TEntity2>(this Model<TEntity1> model, Expression<Func<TEntity1, TEntity2>> expression)
+        public static OneSidedRelationship<TEntity1, TEntity2> HasOne<TEntity1, TEntity2>(this Model<TEntity1> model, Expression<Func<TEntity1, TEntity2>> expression)
         {
             Relationship relationship = model.Relationship;
             relationship.Property1 = GetPropertyInfo(expression);
@@ -14,24 +14,12 @@ namespace LocalJSONDatabase.Services.ModelBuilder
             var type2 = typeof(TEntity2);
             relationship.Type2 = !type2.IsGenericType ? type2 : type2.GetGenericTypeDefinition() == typeof(IEnumerable) ? type2.GetGenericArguments()[0] : throw new NotImplementedException();
 
-            return new Model<TEntity2>(relationship);
+            return new OneSidedRelationship<TEntity1, TEntity2>(relationship);
         }
 
-        public static Relationship WithMany<TEntity1, TEntity2>(this Model<TEntity2> model, Expression<Func<TEntity2, IEnumerable<TEntity1>>> expression)
-        {
-            Relationship relationship = model.Relationship;
-            relationship.Property2 = GetPropertyInfo(expression);
+        public static Relationship WithMany<TEntity1, TEntity2>(this OneSidedRelationship<TEntity1, TEntity2> oneSidedRelationship, Expression<Func<TEntity2, IEnumerable<TEntity1>>> expression) => oneSidedRelationship.FinishRelationship(GetPropertyInfo(expression));
 
-            return relationship;
-        }
-
-        public static Relationship WithOne<TEntity1, TEntity2>(this Model<TEntity2> model, Expression<Func<TEntity1, TEntity2>> expression)
-        {
-            Relationship relationship = model.Relationship;
-            relationship.Property2 = GetPropertyInfo(expression);
-
-            return relationship;
-        }
+        public static Relationship WithOne<TEntity1, TEntity2>(this OneSidedRelationship<TEntity1, TEntity2> oneSidedRelationship, Expression<Func<TEntity2, TEntity1>> expression) => oneSidedRelationship.FinishRelationship(GetPropertyInfo(expression));
 
         private static PropertyInfo GetPropertyInfo<TEntity1, TEntity2>(Expression<Func<TEntity1, TEntity2>> expression)
         {
